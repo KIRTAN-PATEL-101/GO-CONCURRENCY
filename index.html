@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Guide to Go Concurrency</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Neutral Slate with Indigo Accent -->
+    <!-- Application Structure Plan: A two-column dashboard layout with thematic navigation on the left and dynamic content on the right. This non-linear structure allows users to explore topics freely, enhancing learning. Interactive diagrams and demos are used to visualize abstract concepts like scheduling and channel communication, making them more tangible than text alone. -->
+    <!-- Visualization & Content Choices: Goroutines vs OS Threads -> Goal: Compare -> HTML Table -> Justification: Clear, direct comparison. Go Scheduler -> Goal: Organize -> Animated HTML/CSS Diagram -> Justification: Visualizes the complex M:P:N model dynamically. Channels -> Goal: Flow -> Animated HTML/CSS Diagram -> Justification: Shows data transfer and blocking behavior interactively. Race Conditions -> Goal: Inform/Problem -> Interactive JS Demo -> Justification: Allows users to experience the unpredictability of a race condition firsthand. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+            color: #334155; /* slate-700 */
+        }
+        .nav-link {
+            transition: all 0.2s ease-in-out;
+        }
+        .nav-link.active {
+            background-color: #4f46e5; /* indigo-600 */
+            color: white;
+            transform: translateX(4px);
+        }
+        .content-section {
+            display: none;
+        }
+        .content-section.active {
+            display: block;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .code-block {
+            background-color: #1e293b; /* slate-800 */
+            color: #e2e8f0; /* slate-200 */
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+        }
+        .interactive-diagram {
+            border: 1px solid #e2e8f0; /* slate-200 */
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            background-color: white;
+        }
+        .goroutine-vis, .channel-vis {
+            border: 2px dashed #94a3b8; /* slate-400 */
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+            min-height: 80px;
+            transition: all 0.3s ease;
+        }
+        .data-packet {
+            width: 30px;
+            height: 30px;
+            background-color: #4f46e5; /* indigo-600 */
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            opacity: 0;
+            transition: all 0.5s ease-in-out;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+    </style>
+</head>
+<body class="flex h-screen">
+
+    <!-- Navigation Sidebar -->
+    <nav class="w-64 bg-white border-r border-slate-200 p-4 overflow-y-auto flex-shrink-0">
+        <h1 class="text-xl font-bold text-indigo-600 mb-6">Go Concurrency</h1>
+        <ul class="space-y-2">
+            <li><a href="#" class="nav-link block p-2 rounded-lg font-medium" data-view="introduction">Introduction</a></li>
+            <li><a href="#" class="nav-link block p-2 rounded-lg font-medium" data-view="goroutines">Goroutines</a></li>
+            <li><a href="#" class="nav-link block p-2 rounded-lg font-medium" data-view="channels">Channels</a></li>
+            <li><a href="#" class="nav-link block p-2 rounded-lg font-medium" data-view="select">The `select` Statement</a></li>
+            <li><a href="#" class="nav-link block p-2 rounded-lg font-medium" data-view="sync">Synchronization</a></li>
+            <li><a href="#" class="nav-link block p-2 rounded-lg font-medium" data-view="context">Context Package</a></li>
+            <li><a href="#" class="nav-link block p-2 rounded-lg font-medium" data-view="patterns">Concurrency Patterns</a></li>
+            <li><a href="#" class="nav-link block p-2 rounded-lg font-medium" data-view="issues">Common Issues</a></li>
+            <li><a href="#" class="nav-link block p-2 rounded-lg font-medium" data-view="memory-model">Go Memory Model</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow p-6 md:p-8 lg:p-10 overflow-y-auto">
+        <div class="max-w-4xl mx-auto">
+            
+            <!-- Introduction Section -->
+            <section id="introduction" class="content-section space-y-6">
+                <h2 class="text-3xl font-bold text-slate-800 border-b pb-2">Introduction to Concurrency</h2>
+                <p>This interactive guide explores Go's powerful and simple approach to concurrent programming. Go was designed with concurrency as a first-class citizen, making it easier to build responsive, high-performance applications that can handle many tasks at once.</p>
+                
+                <div class="p-4 bg-indigo-50 border-l-4 border-indigo-500 rounded-r-lg">
+                    <h3 class="text-lg font-semibold text-slate-800">Concurrency vs. Parallelism</h3>
+                    <p class="mt-2">It's crucial to understand the difference:</p>
+                    <ul class="list-disc list-inside mt-2 space-y-1">
+                        <li><strong>Concurrency</strong> is about dealing with many things at once. It's a way of structuring your program to handle multiple independent tasks, which may or may not run at the same time.</li>
+                        <li><strong>Parallelism</strong> is about doing many things at once. It's the simultaneous execution of tasks, requiring multiple CPU cores.</li>
+                    </ul>
+                    <p class="mt-2">In Go, you design for <strong>concurrency</strong>, and the Go runtime provides <strong>parallelism</strong> if the hardware supports it.</p>
+                </div>
+
+                <div class="p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+                    <h3 class="text-lg font-semibold text-slate-800">Go's Philosophy: "Share Memory by Communicating"</h3>
+                    <p class="mt-2">Go encourages a different approach to concurrency. Instead of different tasks sharing the same piece of memory and using locks to prevent conflicts (a common source of bugs), Go prefers passing data between tasks using <strong>channels</strong>.</p>
+                    <p class="mt-2 font-medium">This means that at any given time, only one task (goroutine) has ownership of the data, which inherently prevents race conditions and simplifies concurrent code.</p>
+                </div>
+            </section>
+
+            <!-- Goroutines Section -->
+            <section id="goroutines" class="content-section space-y-6">
+                <h2 class="text-3xl font-bold text-slate-800 border-b pb-2">Goroutines</h2>
+                <p>Goroutines are the fundamental building blocks of concurrency in Go. A goroutine is a lightweight thread of execution managed by the Go runtime.</p>
+                
+                <h3 class="text-2xl font-semibold text-slate-800">Launching a Goroutine</h3>
+                <p>Starting a goroutine is incredibly simple. You just use the `go` keyword before a function call. This tells Go to run the function concurrently, without blocking the current flow.</p>
+                <div class="code-block">
+                    <pre><code>go myFunction() // Run myFunction in a new goroutine</code></pre>
+                </div>
+
+                <h3 class="text-2xl font-semibold text-slate-800">Goroutines vs. OS Threads</h3>
+                <p>Goroutines are not the same as the operating system threads you might be familiar with from other languages. They are much more efficient, allowing you to run thousands or even millions of them at once.</p>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white border border-slate-200 rounded-lg">
+                        <thead class="bg-slate-100">
+                            <tr>
+                                <th class="p-3 text-left font-semibold">Feature</th>
+                                <th class="p-3 text-left font-semibold">Goroutines</th>
+                                <th class="p-3 text-left font-semibold">OS Threads</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-t">
+                                <td class="p-3 font-medium">Memory</td>
+                                <td class="p-3">Lightweight (starts at 2KB)</td>
+                                <td class="p-3">Heavyweight (1MB or more)</td>
+                            </tr>
+                            <tr class="border-t bg-slate-50">
+                                <td class="p-3 font-medium">Management</td>
+                                <td class="p-3">Go Runtime (user-space)</td>
+                                <td class="p-3">Operating System (kernel)</td>
+                            </tr>
+                            <tr class="border-t">
+                                <td class="p-3 font-medium">Startup Time</td>
+                                <td class="p-3">Very Fast</td>
+                                <td class="p-3">Slower</td>
+                            </tr>
+                            <tr class="border-t bg-slate-50">
+                                <td class="p-3 font-medium">Communication</td>
+                                <td class="p-3">Channels (idiomatic)</td>
+                                <td class="p-3">Shared Memory & Locks</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="text-2xl font-semibold text-slate-800">The Main Goroutine</h3>
+                <p>Every Go program starts with a single goroutine: the `main` goroutine. If the `main` goroutine finishes, the program exits immediately, even if other goroutines are still running. You must explicitly wait for other goroutines to complete if their work is important.</p>
+            </section>
+
+            <!-- Channels Section -->
+            <section id="channels" class="content-section space-y-6">
+                <h2 class="text-3xl font-bold text-slate-800 border-b pb-2">Channels</h2>
+                <p>Channels are the pipes that connect concurrent goroutines. You can send values into channels from one goroutine and receive those values into another goroutine, providing a safe and easy way to communicate.</p>
+                
+                <h3 class="text-2xl font-semibold text-slate-800">Creating and Using Channels</h3>
+                <div class="code-block">
+                    <pre><code>// Create a channel for integers
+ch := make(chan int)
+
+// Send a value to the channel
+ch <- 42
+
+// Receive a value from the channel
+value := <-ch</code></pre>
+                </div>
+
+                <h3 class="text-2xl font-semibold text-slate-800">Unbuffered Channels (Synchronous)</h3>
+                <p>By default, channels are unbuffered. This means they will only accept a send if there is a corresponding receive ready to take the value. Both send and receive operations block until the other side is ready. This makes them great for synchronization.</p>
+                <div class="interactive-diagram">
+                    <h4 class="text-lg font-semibold text-center mb-4">Unbuffered Channel Demo</h4>
+                    <div class="flex items-center justify-around relative">
+                        <div id="unbuf-sender" class="goroutine-vis w-1/3">Sender</div>
+                        <div class="w-1/3 h-2 bg-slate-300 rounded-full"></div>
+                        <div id="unbuf-receiver" class="goroutine-vis w-1/3">Receiver</div>
+                        <div id="unbuf-packet" class="data-packet">1</div>
+                    </div>
+                    <div class="text-center mt-4">
+                        <button id="run-unbuf-demo" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">Run Demo</button>
+                    </div>
+                    <p id="unbuf-status" class="text-center mt-2 text-sm text-slate-500 h-5"></p>
+                </div>
+
+                <h3 class="text-2xl font-semibold text-slate-800">Buffered Channels (Asynchronous)</h3>
+                <p>You can also create buffered channels with a fixed capacity. Sends to a buffered channel only block if the buffer is full, and receives only block if the buffer is empty. This decouples the sender and receiver.</p>
+                <div class="interactive-diagram">
+                    <h4 class="text-lg font-semibold text-center mb-4">Buffered Channel Demo</h4>
+                    <div class="flex items-center justify-around relative">
+                        <div id="buf-sender" class="goroutine-vis w-1/3">Sender</div>
+                        <div class="w-1/3 h-2 bg-slate-300 rounded-full flex items-center justify-around" id="buf-channel-vis">
+                            <div class="w-8 h-8 border border-slate-400 rounded"></div>
+                            <div class="w-8 h-8 border border-slate-400 rounded"></div>
+                        </div>
+                        <div id="buf-receiver" class="goroutine-vis w-1/3">Receiver</div>
+                        <div id="buf-packet1" class="data-packet">1</div>
+                        <div id="buf-packet2" class="data-packet">2</div>
+                    </div>
+                    <div class="text-center mt-4">
+                        <button id="run-buf-demo" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">Run Demo</button>
+                    </div>
+                    <p id="buf-status" class="text-center mt-2 text-sm text-slate-500 h-5"></p>
+                </div>
+            </section>
+
+            <!-- Select Section -->
+            <section id="select" class="content-section space-y-6">
+                <h2 class="text-3xl font-bold text-slate-800 border-b pb-2">The `select` Statement</h2>
+                <p>The `select` statement lets a goroutine wait on multiple channel operations. It's like a `switch` statement, but for channels. A `select` blocks until one of its cases can run, then it executes that case. If multiple are ready, it chooses one at random.</p>
+                
+                <h3 class="text-2xl font-semibold text-slate-800">Basic `select`</h3>
+                <div class="code-block">
+                    <pre><code>select {
+case msg1 := <-ch1:
+    fmt.Println("received", msg1)
+case msg2 := <-ch2:
+    fmt.Println("received", msg2)
+}</code></pre>
+                </div>
+                
+                <h3 class="text-2xl font-semibold text-slate-800">Timeouts with `select`</h3>
+                <p>A very common use of `select` is to implement timeouts. By combining a case for your operation with a case for `time.After`, you can prevent a goroutine from waiting forever.</p>
+                <div class="code-block">
+                    <pre><code>select {
+case res := <-operationChannel:
+    fmt.Println(res)
+case <-time.After(1 * time.Second):
+    fmt.Println("operation timed out!")
+}</code></pre>
+                </div>
+                
+                <h3 class="text-2xl font-semibold text-slate-800">Non-Blocking Operations with `default`</h3>
+                <p>Adding a `default` case to a `select` makes it non-blocking. If no other case is ready, the `default` case will run immediately.</p>
+                <div class="code-block">
+                    <pre><code>select {
+case msg := <-messages:
+    fmt.Println("received message", msg)
+default:
+    fmt.Println("no message received")
+}</code></pre>
+                </div>
+            </section>
+
+            <!-- Sync Section -->
+            <section id="sync" class="content-section space-y-6">
+                <h2 class="text-3xl font-bold text-slate-800 border-b pb-2">Synchronization Primitives</h2>
+                <p>While channels are the preferred way to communicate, sometimes you need more traditional synchronization tools. The `sync` package provides these for situations involving shared memory.</p>
+
+                <div class="p-4 bg-white border border-slate-200 rounded-lg">
+                    <h3 class="text-xl font-semibold text-slate-800">`sync.WaitGroup`</h3>
+                    <p class="mt-2">A `WaitGroup` waits for a collection of goroutines to finish. You `Add()` a count of goroutines to wait for, each goroutine calls `Done()` when it's finished, and the main goroutine calls `Wait()` to block until all are done.</p>
+                </div>
+
+                <div class="p-4 bg-white border border-slate-200 rounded-lg">
+                    <h3 class="text-xl font-semibold text-slate-800">`sync.Mutex`</h3>
+                    <p class="mt-2">A `Mutex` (mutual exclusion lock) is used to protect shared data from being accessed by multiple goroutines at the same time. This prevents race conditions.</p>
+                    <div class="interactive-diagram mt-4">
+                        <h4 class="text-lg font-semibold text-center mb-4">Race Condition Demo</h4>
+                        <p class="text-center text-sm mb-4">1000 goroutines will increment a counter. See what happens with and without a mutex.</p>
+                        <div class="flex items-center justify-center space-x-4 mb-4">
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" id="use-mutex-checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span>Use Mutex</span>
+                            </label>
+                            <button id="run-race-demo" class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">Run Demo</button>
+                        </div>
+                        <div class="text-center">
+                            <p>Expected Result: <span class="font-bold">1000</span></p>
+                            <p>Actual Result: <span id="race-result" class="font-bold text-2xl text-indigo-600">-</span></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-4 bg-white border border-slate-200 rounded-lg">
+                    <h3 class="text-xl font-semibold text-slate-800">`sync.RWMutex`</h3>
+                    <p class="mt-2">A `RWMutex` (Read-Write Mutex) is a more specialized lock that allows any number of readers to access the data simultaneously, but only one writer at a time. It's useful when you have many more reads than writes.</p>
+                </div>
+                
+                <div class="p-4 bg-white border border-slate-200 rounded-lg">
+                    <h3 class="text-xl font-semibold text-slate-800">`sync.Once`</h3>
+                    <p class="mt-2">A `Once` is an object that will perform an action exactly once, no matter how many times it's called from different goroutines. It's perfect for one-time initialization tasks.</p>
+                </div>
+            </section>
+            
+            <!-- Context Section -->
+            <section id="context" class="content-section space-y-6">
+                <h2 class="text-3xl font-bold text-slate-800 border-b pb-2">Context Package</h2>
+                <p>The `context` package is essential for managing the lifecycle of requests and goroutines. It allows you to pass deadlines, cancellation signals, and other request-scoped values across API boundaries and between goroutines.</p>
+                
+                <h3 class="text-2xl font-semibold text-slate-800">Key Concepts</h3>
+                <ul class="list-disc list-inside space-y-2">
+                    <li><strong>Cancellation:</strong> A parent operation can cancel all the goroutines it has started.</li>
+                    <li><strong>Timeouts/Deadlines:</strong> You can set a time limit for an operation. If it takes too long, it's automatically canceled.</li>
+                    <li><strong>Request-scoped Values:</strong> Carry data like user IDs or trace IDs through a call stack without passing them as arguments to every function.</li>
+                </ul>
+
+                <h3 class="text-2xl font-semibold text-slate-800">How it Works</h3>
+                <p>You create a `context` and pass it to functions. These functions can then listen for a cancellation signal on the context's `Done()` channel using a `select` statement. When the context is canceled (either manually or by a timeout), the `Done()` channel is closed, and the goroutines can clean up and exit gracefully.</p>
+                <div class="code-block">
+                    <pre><code>func worker(ctx context.Context) {
+    select {
+    case <-time.After(2 * time.Second):
+        fmt.Println("work done")
+    case <-ctx.Done(): // Check if context was canceled
+        fmt.Println("work canceled:", ctx.Err())
+    }
+}
+
+func main() {
+    // Create a context that times out after 1 second
+    ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+    defer cancel() // Important to call cancel to release resources
+
+    worker(ctx) // This will print "work canceled: context deadline exceeded"
+}</code></pre>
+                </div>
+                <p class="mt-4 font-medium">Passing a `context` as the first argument to functions is a standard convention in modern Go code, especially for network services and long-running tasks.</p>
+            </section>
+            
+            <!-- Patterns Section -->
+            <section id="patterns" class="content-section space-y-6">
+                <h2 class="text-3xl font-bold text-slate-800 border-b pb-2">Common Concurrency Patterns</h2>
+                <p>Go's primitives enable several powerful patterns for structuring concurrent work.</p>
+
+                <div class="p-4 bg-white border border-slate-200 rounded-lg">
+                    <h3 class="text-xl font-semibold text-slate-800">Worker Pools</h3>
+                    <p class="mt-2">A worker pool is a pattern for limiting the number of goroutines running at once. Instead of launching a new goroutine for every task, you have a fixed number of "worker" goroutines that pull tasks from a jobs channel. This prevents resource exhaustion.</p>
+                    <div class="interactive-diagram mt-4">
+                        <h4 class="text-lg font-semibold text-center mb-4">Worker Pool Performance</h4>
+                        <p class="text-center text-sm mb-4">Compare the time to process 10 jobs with a variable number of workers.</p>
+                        <div class="chart-container">
+                            <canvas id="worker-pool-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-white border border-slate-200 rounded-lg">
+                    <h3 class="text-xl font-semibold text-slate-800">Fan-Out, Fan-In</h3>
+                    <p class="mt-2">This pattern is used to parallelize work. <strong>Fan-Out:</strong> A producer goroutine distributes jobs to multiple worker goroutines. <strong>Fan-In:</strong> A consumer goroutine collects the results from all the workers into a single channel.</p>
+                </div>
+
+                <div class="p-4 bg-white border border-slate-200 rounded-lg">
+                    <h3 class="text-xl font-semibold text-slate-800">Pipelines</h3>
+                    <p class="mt-2">A pipeline is a series of stages connected by channels, where each stage is a goroutine. The output of one stage becomes the input for the next. This is great for stream processing, as each stage can work concurrently on different pieces of data.</p>
+                </div>
+            </section>
+
+            <!-- Issues Section -->
+            <section id="issues" class="content-section space-y-6">
+                <h2 class="text-3xl font-bold text-slate-800 border-b pb-2">Common Concurrency Issues</h2>
+                <p>While Go makes concurrency easier, it doesn't eliminate common pitfalls. Understanding them is key to writing robust code.</p>
+
+                <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+                    <h3 class="text-lg font-semibold text-slate-800">Race Conditions</h3>
+                    <p class="mt-2">This happens when multiple goroutines access shared data, and at least one is writing, without synchronization. The result is unpredictable. <strong>Solution:</strong> Use channels to pass ownership of data or use `sync.Mutex` to protect access.</p>
+                    <p class="mt-2">You can detect races using the `-race` flag: `go run -race main.go`.</p>
+                </div>
+
+                <div class="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-r-lg">
+                    <h3 class="text-lg font-semibold text-slate-800">Deadlocks</h3>
+                    <p class="mt-2">A deadlock occurs when goroutines are all waiting for each other, and none can proceed. A common cause is a goroutine trying to send to an unbuffered channel with no receiver ready. The Go runtime can often detect and report deadlocks, causing a panic.</p>
+                </div>
+
+                <div class="p-4 bg-orange-50 border-l-4 border-orange-500 rounded-r-lg">
+                    <h3 class="text-lg font-semibold text-slate-800">Livelocks</h3>
+                    <p class="mt-2">A livelock is when goroutines are actively working but making no progress. They are busy responding to each other's state changes but not actually completing their tasks. This is rarer than a deadlock but can be harder to debug.</p>
+                </div>
+            </section>
+
+            <!-- Memory Model Section -->
+            <section id="memory-model" class="content-section space-y-6">
+                <h2 class="text-3xl font-bold text-slate-800 border-b pb-2">Go Memory Model</h2>
+                <p>The Go Memory Model specifies the conditions under which a read of a variable in one goroutine is guaranteed to observe the value written by another goroutine. This is defined by the "happens-before" relationship.</p>
+
+                <div class="p-4 bg-indigo-50 border-l-4 border-indigo-500 rounded-r-lg">
+                    <h3 class="text-lg font-semibold text-slate-800">"Happens-Before"</h3>
+                    <p class="mt-2">If event A happens-before event B, then the effects of A are guaranteed to be visible to B. If there is no happens-before relationship, their order is not guaranteed, and you might have a race condition.</p>
+                </div>
+
+                <h3 class="text-2xl font-semibold text-slate-800">Synchronization Establishes "Happens-Before"</h3>
+                <p>You must use synchronization primitives to establish a happens-before relationship between goroutines:</p>
+                <ul class="list-disc list-inside space-y-2">
+                    <li>A <strong>send</strong> on a channel happens-before the corresponding <strong>receive</strong> completes.</li>
+                    <li>The <strong>closing</strong> of a channel happens-before a receive that returns a zero value because the channel is closed.</li>
+                    <li>An <strong>unlock</strong> of a `sync.Mutex` happens-before a subsequent <strong>lock</strong> on the same mutex.</li>
+                </ul>
+                <p class="mt-4">The core message is: if you are accessing shared data from multiple goroutines, you <strong>must</strong> use a synchronization mechanism.</p>
+            </section>
+
+        </div>
+    </main>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const navLinks = document.querySelectorAll('.nav-link');
+    const contentSections = document.querySelectorAll('.content-section');
+    let workerPoolChart = null;
+
+    function setActiveView(viewId) {
+        navLinks.forEach(link => {
+            link.classList.toggle('active', link.dataset.view === viewId);
+        });
+        contentSections.forEach(section => {
+            section.classList.toggle('active', section.id === viewId);
+        });
+
+        if (viewId === 'patterns' && !workerPoolChart) {
+            renderWorkerPoolChart();
+        }
+    }
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const viewId = e.target.dataset.view;
+            setActiveView(viewId);
+        });
+    });
+
+    // Set initial view
+    setActiveView('introduction');
+
+    // --- Interactive Demos ---
+
+    // Unbuffered Channel Demo
+    const runUnbufDemoBtn = document.getElementById('run-unbuf-demo');
+    const unbufStatus = document.getElementById('unbuf-status');
+    const unbufPacket = document.getElementById('unbuf-packet');
+    const unbufSender = document.getElementById('unbuf-sender');
+    const unbufReceiver = document.getElementById('unbuf-receiver');
+    
+    runUnbufDemoBtn.addEventListener('click', () => {
+        runUnbufDemoBtn.disabled = true;
+        unbufStatus.textContent = "Sender is trying to send... but blocks.";
+        unbufSender.style.borderColor = '#f59e0b'; // amber-500
+        unbufPacket.style.opacity = '0';
+        unbufPacket.style.transform = 'translateX(0)';
+
+        setTimeout(() => {
+            unbufStatus.textContent = "Receiver is now ready. Communication happens.";
+            unbufReceiver.style.borderColor = '#22c55e'; // green-500
+            unbufPacket.style.opacity = '1';
+            const senderRect = unbufSender.getBoundingClientRect();
+            const receiverRect = unbufReceiver.getBoundingClientRect();
+            const moveX = (receiverRect.left + receiverRect.width / 2) - (senderRect.left + senderRect.width / 2);
+            unbufPacket.style.transform = `translateX(${moveX}px)`;
+        }, 1500);
+
+        setTimeout(() => {
+            unbufStatus.textContent = "Communication complete.";
+            unbufPacket.style.opacity = '0';
+            unbufSender.style.borderColor = '#94a3b8';
+            unbufReceiver.style.borderColor = '#94a3b8';
+            runUnbufDemoBtn.disabled = false;
+        }, 3000);
+    });
+
+    // Buffered Channel Demo
+    const runBufDemoBtn = document.getElementById('run-buf-demo');
+    const bufStatus = document.getElementById('buf-status');
+    const bufPacket1 = document.getElementById('buf-packet1');
+    const bufPacket2 = document.getElementById('buf-packet2');
+    const bufSender = document.getElementById('buf-sender');
+    const bufReceiver = document.getElementById('buf-receiver');
+    const channelVis = document.getElementById('buf-channel-vis');
+
+    runBufDemoBtn.addEventListener('click', () => {
+        runBufDemoBtn.disabled = true;
+        bufStatus.textContent = "Sender sends item 1. It doesn't block.";
+        bufSender.style.borderColor = '#22c55e';
+        bufPacket1.style.opacity = '0';
+        bufPacket2.style.opacity = '0';
+        
+        const senderRect = bufSender.getBoundingClientRect();
+        const channelRect = channelVis.getBoundingClientRect();
+        
+        const moveX1 = (channelRect.left + channelRect.width / 4) - (senderRect.left + senderRect.width / 2);
+        
+        setTimeout(() => {
+            bufPacket1.style.opacity = '1';
+            bufPacket1.style.transform = `translateX(${moveX1}px)`;
+        }, 500);
+        
+        setTimeout(() => {
+            bufStatus.textContent = "Sender sends item 2. Buffer is now full.";
+            const moveX2 = (channelRect.left + channelRect.width * 0.75) - (senderRect.left + senderRect.width / 2);
+            bufPacket2.style.opacity = '1';
+            bufPacket2.style.transform = `translateX(${moveX2}px)`;
+        }, 1500);
+
+        setTimeout(() => {
+            bufStatus.textContent = "Receiver takes item 1. A slot opens up.";
+            bufReceiver.style.borderColor = '#22c55e';
+            const receiverRect = bufReceiver.getBoundingClientRect();
+            const moveX3 = (receiverRect.left + receiverRect.width / 2) - (senderRect.left + senderRect.width / 2);
+            bufPacket1.style.transform = `translateX(${moveX3}px)`;
+        }, 2500);
+        
+        setTimeout(() => {
+             bufPacket1.style.opacity = '0';
+        }, 3000);
+
+        setTimeout(() => {
+            bufStatus.textContent = "Demo complete.";
+            bufSender.style.borderColor = '#94a3b8';
+            bufReceiver.style.borderColor = '#94a3b8';
+            bufPacket2.style.opacity = '0';
+            runBufDemoBtn.disabled = false;
+        }, 4000);
+    });
+
+    // Race Condition Demo
+    const runRaceDemoBtn = document.getElementById('run-race-demo');
+    const useMutexCheckbox = document.getElementById('use-mutex-checkbox');
+    const raceResultEl = document.getElementById('race-result');
+
+    runRaceDemoBtn.addEventListener('click', () => {
+        raceResultEl.textContent = '...running';
+        runRaceDemoBtn.disabled = true;
+        
+        // Simulate the concurrent increments in the browser
+        setTimeout(() => {
+            let counter = 0;
+            const numIncrements = 1000;
+            if (useMutexCheckbox.checked) {
+                counter = numIncrements; // With a mutex, the result is always correct.
+            } else {
+                // Simulate a race condition. The result will be somewhat random but less than 1000.
+                for (let i = 0; i < numIncrements; i++) {
+                    if (Math.random() > 0.1) { // 90% chance of a successful increment
+                        counter++;
+                    }
+                }
+            }
+            raceResultEl.textContent = counter;
+            raceResultEl.style.color = useMutexCheckbox.checked ? '#16a34a' : '#dc2626'; // green or red
+            runRaceDemoBtn.disabled = false;
+        }, 500);
+    });
+    
+    // Worker Pool Chart
+    function renderWorkerPoolChart() {
+        const ctx = document.getElementById('worker-pool-chart').getContext('2d');
+        const data = {
+            labels: ['1 Worker', '2 Workers', '4 Workers', '8 Workers'],
+            datasets: [{
+                label: 'Time to process 10 jobs (seconds)',
+                data: [10.0, 5.0, 2.5, 1.25], // Simulated data
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.2)',
+                    'rgba(54, 162, 235, 0.2)',
+                    'rgba(255, 206, 86, 0.2)',
+                    'rgba(75, 192, 192, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(75, 192, 192, 1)'
+                ],
+                borderWidth: 1
+            }]
+        };
+        workerPoolChart = new Chart(ctx, {
+            type: 'bar',
+            data: data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Time (s)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Worker Pool Performance Simulation'
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+</body>
+</html>
